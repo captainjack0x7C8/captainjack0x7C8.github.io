@@ -167,8 +167,8 @@
     </header>
     <div class="entry">
       
-        <p>JAVA堆内存管理是影响性能主要因素之一。<br>堆内存溢出是JAVA项目非常常见的故障，在解决该问题之前，必须先了解下JAVA堆内存是怎么工作的，如图：</p>
-<img src="/.io//04/21/JVM堆内存详解（转）/java_heap_structure.png" title="This is an image">
+        <p><a href="https://blog.51cto.com/lizhenliang/2164876?wx=" target="_blank" rel="noopener">From 51CTO</a><br></p>
+<h3 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h3><p>JAVA堆内存管理是影响性能主要因素之一。<br>堆内存溢出是JAVA项目非常常见的故障，在解决该问题之前，必须先了解下JAVA堆内存是怎么工作的，如图：<br><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/jvm_heap_detail/java_heap_structure.png" alt="image"></p>
 <ol>
 <li>JVM内存划分为堆内存和非堆内存，堆内存分为年轻代（Young Generation）、老年代（Old Generation），非堆内存就一个永久代（Permanent Generation）。</li>
 <li>年轻代又分为Eden和Survivor区。Survivor区由FromSpace和ToSpace组成。Eden区占大容量，Survivor两个区占小容量，默认比例是8:1:1。</li>
@@ -231,19 +231,14 @@
 </tbody></table>
 <h3 id="垃圾回收算法（GC，Garbage-Collection）"><a href="#垃圾回收算法（GC，Garbage-Collection）" class="headerlink" title="垃圾回收算法（GC，Garbage Collection）"></a>垃圾回收算法（GC，Garbage Collection）</h3><p>红色是标记的非活动对象，绿色是活动对象。</p>
 <ul>
-<li><p>标记-清除（Mark-Sweep）<br>GC分为两个阶段，标记和清除。首先标记所有可回收的对象，在标记完成后统一回收所有被标记的对象。同时会产生不连续的内存碎片。碎片过多会导致以后程序运行时需要分配较大对象时，无法找到足够的连续内存，而不得已再次触发GC。</p>
-<img src="/.io//04/21/JVM堆内存详解（转）/mark-sweep.png" title="This is an image">
+<li><p>标记-清除（Mark-Sweep）<br>GC分为两个阶段，标记和清除。首先标记所有可回收的对象，在标记完成后统一回收所有被标记的对象。同时会产生不连续的内存碎片。碎片过多会导致以后程序运行时需要分配较大对象时，无法找到足够的连续内存，而不得已再次触发GC。<br><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/jvm_heap_detail/mark-sweep.png" alt="image"></p>
 </li>
-<li><p>复制（Copy）<br>将内存按容量划分为两块，每次只使用其中一块。当这一块内存用完了，就将存活的对象复制到另一块上，然后再把已使用的内存空间一次清理掉。这样使得每次都是对半个内存区回收，也不用考虑内存碎片问题，简单高效。缺点需要两倍的内存空间。</p>
-<img src="/.io//04/21/JVM堆内存详解（转）/copy.png" title="This is an image">
+<li><p>复制（Copy）<br>将内存按容量划分为两块，每次只使用其中一块。当这一块内存用完了，就将存活的对象复制到另一块上，然后再把已使用的内存空间一次清理掉。这样使得每次都是对半个内存区回收，也不用考虑内存碎片问题，简单高效。缺点需要两倍的内存空间。<br><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/jvm_heap_detail/copy.png" alt="image"></p>
 </li>
-<li><p>标记-整理（Mark-Compact）<br>也分为两个阶段，首先标记可回收的对象，再将存活的对象都向一端移动，然后清理掉边界以外的内存。此方法避免标记-清除算法的碎片问题，同时也避免了复制算法的空间问题。<br>一般年轻代中执行GC后，会有少量的对象存活，就会选用复制算法，只要付出少量的存活对象复制成本就可以完成收集。而老年代中因为对象存活率高，没有额外过多内存空间分配，就需要使用标记-清理或者标记-整理算法来进行回收。</p>
-<img src="/.io//04/21/JVM堆内存详解（转）/mark-compact.png" title="This is an image">
-
+<li><p>标记-整理（Mark-Compact）<br>也分为两个阶段，首先标记可回收的对象，再将存活的对象都向一端移动，然后清理掉边界以外的内存。此方法避免标记-清除算法的碎片问题，同时也避免了复制算法的空间问题。<br>一般年轻代中执行GC后，会有少量的对象存活，就会选用复制算法，只要付出少量的存活对象复制成本就可以完成收集。而老年代中因为对象存活率高，没有额外过多内存空间分配，就需要使用标记-清理或者标记-整理算法来进行回收。<br><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/jvm_heap_detail/mark-compact.png" alt="image"></p>
+<h3 id="垃圾收集器"><a href="#垃圾收集器" class="headerlink" title="垃圾收集器"></a>垃圾收集器</h3></li>
+<li><p>串行收集器（Serial）</p>
 </li>
-</ul>
-<h3 id="垃圾收集器"><a href="#垃圾收集器" class="headerlink" title="垃圾收集器"></a>垃圾收集器</h3><ul>
-<li>串行收集器（Serial）</li>
 </ul>
 <p>比较老的收集器，单线程。收集时，必须暂停应用的工作线程，直到收集结束。</p>
 <ul>
