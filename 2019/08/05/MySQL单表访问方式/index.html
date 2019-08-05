@@ -1,0 +1,210 @@
+<!DOCTYPE HTML>
+<html>
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="utf-8">
+  
+  <title>MySQL单表访问方式 | Index</title>
+  <meta name="author" content="captainjack0x7c8">
+  
+  <meta name="description" content="Less is more">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="MySQL单表访问方式">
+  <meta property="og:site_name" content="Index">
+
+  
+    <meta property="og:image" content>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="Index" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+</head>
+</html>
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">Index</a></h1>
+  <h2><a href="/"></a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div>
+</header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2019-08-05T07:31:56.000Z"><a href="/2019/08/05/MySQL单表访问方式/">2019-08-05</a></time>
+      
+      
+  
+    <h1 class="title">MySQL单表访问方式</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h2 id="Access-method"><a href="#Access-method" class="headerlink" title="Access method"></a>Access method</h2><p>版本5.7</p>
+<h3 id="system"><a href="#system" class="headerlink" title="system"></a>system</h3><p>当表中只有一条记录并且该表使用的存储引擎的统计数据是精确的，比如MyISAM、Memory，那么对该表的访问方法就是system。</p>
+<h3 id="const"><a href="#const" class="headerlink" title="const"></a>const</h3><p>当根据主键或唯一二级索引列与常数进行等值匹配时，对单表的访问方法就是const。</p>
+<h3 id="ref"><a href="#ref" class="headerlink" title="ref"></a>ref</h3><p>当通过普通的二级索引列与常量进行等值匹配时来查询某个表，那么对该表的访问方法就可能是ref。</p>
+<h3 id="ref-or-null"><a href="#ref-or-null" class="headerlink" title="ref_or_null"></a>ref_or_null</h3><p>当对普通二级索引进行等值匹配查询，该索引列的值也可以是NULL值时，那么对该表的访问方法就可能是ref_or_null。</p>
+<h3 id="range"><a href="#range" class="headerlink" title="range"></a>range</h3><p>如果使用索引获取某些范围区间的记录，那么就可能使用到range访问方法。</p>
+<h3 id="index"><a href="#index" class="headerlink" title="index"></a>index</h3><p>当我们可以使用索引覆盖，但需要扫描全部的索引记录时，该表的访问方法就是index。</p>
+<h3 id="eq-ref"><a href="#eq-ref" class="headerlink" title="eq_ref"></a>eq_ref</h3><p>在连接查询时，如果被驱动表是通过主键或者唯一二级索引列等值匹配的方式进行访问的（如果该主键或者唯一二级索引是联合索引的话，所有的索引列都必须进行等值比较），则对该被驱动表的访问方法就是eq_ref。</p>
+<h3 id="index-merge"><a href="#index-merge" class="headerlink" title="index_merge"></a>index_merge</h3><p>在一般情况下执行一个查询时最多只会用到单个二级索引，特殊情况下也可能在一个查询中使用到多个二级索引，这种使用到多个索引来完成一次查询的执行方法称之为<strong>index_merge</strong>，具体的合并方式分为以下三种</p>
+<ul>
+<li>Intersection：交集，某个查询可以使用多个二级索引，将从多个二级索引中查询到的结果取交集。<ul>
+<li>二级索引列是等值匹配的情况，对于联合索引来说，在联合索引中的每个列都必须等值匹配，不能出现只匹配部分列的情况。</li>
+<li>主键列可以是范围匹配。</li>
+</ul>
+</li>
+<li>Union：并集，适用于使用不同索引的搜索条件之间使用OR连接起来的情况。<ul>
+<li>二级索引列是等值匹配的情况，对于联合索引来说，在联合索引中的每个列都必须等值匹配，不能出现只出现匹配部分列的情况。</li>
+<li>主键列可以是范围匹配。</li>
+<li>使用Intersection索引合并的搜索条件。</li>
+</ul>
+</li>
+<li>Sort-Union：先按照二级索引记录的主键值进行排序，之后按照Union索引合并方式执行的方式称之为Sort-Union索引合并，显然Sort-Union索引合并比单纯的Union索引合并多了一步对二级索引记录的主键值排序的过程。<h3 id="unique-subquery"><a href="#unique-subquery" class="headerlink" title="unique_subquery"></a>unique_subquery</h3>类似于两表连接中被驱动表的<strong>eq_ref</strong>访问方法，<strong>unique_subquery</strong>是针对在一些包含IN子查询的查询语句中，如果查询优化器决定将IN子查询转换为EXISTS子查询，而且子查询可以使用到主键进行等值匹配的话，那么该子查询执行计划的type列的值就是unique_subquery。<h3 id="index-subquery"><a href="#index-subquery" class="headerlink" title="index_subquery"></a>index_subquery</h3>与<strong>unique_subquery</strong>类似，只不过访问子查询中的表时使用的是普通的索引。<h3 id="all"><a href="#all" class="headerlink" title="all"></a>all</h3>全表扫描方式。<h3 id="fulltext"><a href="#fulltext" class="headerlink" title="fulltext"></a>fulltext</h3>全文检索时会使用该方式。</li>
+</ul>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+  
+  <div class="tags">
+    <a href="/tags/MySQL/">MySQL</a>
+  </div>
+
+        
+  <div class="addthis addthis_toolbox addthis_default_style">
+    
+      <a class="addthis_button_facebook_like" fb:like:layout="button_count"></a>
+    
+    
+      <a class="addthis_button_tweet"></a>
+    
+    
+      <a class="addthis_button_google_plusone" g:plusone:size="medium"></a>
+    
+    
+      <a class="addthis_button_pinterest_pinit" pi:pinit:layout="horizontal"></a>
+    
+    <a class="addthis_counter addthis_pill_style"></a>
+  </div>
+  <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
+
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+<section id="comment">
+  <h1 class="title">Comments</h1>
+
+  
+      <div id="fb-root"></div>
+<script>
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=123456789012345";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+</script>
+
+<div class="fb-comments" data-href="https://captainjack0x7c8.github.io/2019/08/05/MySQL单表访问方式/index.html" data-num-posts="5" data-width="840" data-colorscheme="light"></div>
+      
+  
+</section>
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="Search">
+    <input type="hidden" name="q" value="site:captainjack0x7c8.github.io">
+  </form>
+</div>
+
+  
+
+  
+<div class="widget tag">
+  <h3 class="title">Tags</h3>
+  <ul class="entry">
+  
+    <li><a href="/tags/AOP/">AOP</a><small>1</small></li>
+  
+    <li><a href="/tags/Feign/">Feign</a><small>1</small></li>
+  
+    <li><a href="/tags/HTTP/">HTTP</a><small>1</small></li>
+  
+    <li><a href="/tags/JDK/">JDK</a><small>1</small></li>
+  
+    <li><a href="/tags/JVM/">JVM</a><small>1</small></li>
+  
+    <li><a href="/tags/MySQL/">MySQL</a><small>1</small></li>
+  
+    <li><a href="/tags/RFC/">RFC</a><small>1</small></li>
+  
+    <li><a href="/tags/Spring-Cloud/">Spring Cloud</a><small>1</small></li>
+  
+    <li><a href="/tags/linux/">linux</a><small>1</small></li>
+  
+    <li><a href="/tags/算法/">算法</a><small>2</small></li>
+  
+    <li><a href="/tags/设计模式/">设计模式</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2019 captainjack0x7c8
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+</body>
+</html>
