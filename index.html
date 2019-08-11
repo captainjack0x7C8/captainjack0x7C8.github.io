@@ -52,6 +52,103 @@
     <header>
       
         <div class="icon"></div>
+        <time datetime="2019-08-11T03:33:14.000Z"><a href="/2019/08/11/synchronized实现中的锁膨胀/">2019-08-11</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2019/08/11/synchronized实现中的锁膨胀/">synchronized实现中的锁膨胀</a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h3 id="synchronized实现中的锁膨胀"><a href="#synchronized实现中的锁膨胀" class="headerlink" title="synchronized实现中的锁膨胀"></a>synchronized实现中的锁膨胀</h3><p>JVM在不同的竞争情况下，对synchronized提供了不同的优化方式</p>
+<ul>
+<li>锁消除</li>
+<li>自旋</li>
+<li>自适应自旋</li>
+</ul>
+<p>在优化过程中锁主要存在4种状态：</p>
+<ol>
+<li>无锁状态</li>
+<li>偏向锁状态</li>
+<li>轻量级锁状态</li>
+<li>重量级锁状态</li>
+</ol>
+<p>这四种状态会根据资源竞争情况进行膨胀（升级）。</p>
+<h4 id="偏向锁"><a href="#偏向锁" class="headerlink" title="偏向锁"></a>偏向锁</h4><p>偏向锁的目的是为了消除无竞争情况下的同步原语，从而进一步提升性能。‘偏’指的是该锁会偏向于首先获得他的线程，如果在执行过程中，该锁未被其他的线程获取，则持有偏向锁的线程就一直不需要同步。</p>
+<h5 id="获取偏向锁的过程"><a href="#获取偏向锁的过程" class="headerlink" title="获取偏向锁的过程"></a>获取偏向锁的过程</h5><ol>
+<li>检查Mark World偏向锁是否打开。若为1，则执行步骤2，否则代表不支持偏向锁。</li>
+<li>检查Mark World储存的线程ID是否为当前线程ID，如果是则执行同步块，否则执行步骤3.</li>
+<li>使用CAS操作将Mark World中线程ID改为当前线程ID，若成功则执行同步代码块，否则执行步骤4。</li>
+<li>当拥有该锁的线程到达安全点后，挂起该线程，升级为轻量级锁。<h5 id="释放偏向锁的过程"><a href="#释放偏向锁的过程" class="headerlink" title="释放偏向锁的过程"></a>释放偏向锁的过程</h5></li>
+<li>偏向锁采取了竞争才会释放锁的方案，线程并不会主动放弃偏向锁，需要等待其他线程竞争。</li>
+<li>等待全局安全点。</li>
+<li>暂停拥有偏向锁的线程，检查持有偏向锁的线程是否活着，如果处于非活动状态，则将对象头设置为无锁状态，否则设置为被锁定状态。如果锁对象处于无锁状态，则恢复到无锁状态（01），以允许其他线程竞争，如果锁对象处于锁定状态，则挂起持有偏向锁的线程，并将对象头Mark World的锁记录指针改为当前线程的锁记录，锁升级为轻量锁。<h4 id="轻量级锁"><a href="#轻量级锁" class="headerlink" title="轻量级锁"></a>轻量级锁</h4>轻量级锁区别于使用mutex方式实现的重量级锁，他使用对象头中的Mark World进行同步。<h5 id="获取轻量锁的过程"><a href="#获取轻量锁的过程" class="headerlink" title="获取轻量锁的过程"></a>获取轻量锁的过程</h5></li>
+<li>在代码进入同步块的时候，如果同步对象锁状态为无锁状态（锁标志位为“01”状态，是否为偏向锁为“0”），虚拟机首先将在当前线程的栈帧中建立一个名为锁记录（Lock Record）的空间，用于存储锁对象目前的Mark Word的拷贝，官方称之为 Displaced Mark Word。</li>
+<li>拷贝对象头中的Mark Word复制到锁记录中。</li>
+<li>拷贝成功后，虚拟机将使用CAS操作尝试将对象的Mark Word更新为指向Lock Record的指针，并将Lock record里的owner指针指向object mark word。如果更新成功，则执行步骤4，否则执行步骤5。</li>
+<li>如果这个更新动作成功了，那么这个线程就拥有了该对象的锁，并且对象Mark Word的锁标志位设置为“00”，即表示此对象处于轻量级锁定状态。</li>
+<li>如果这个更新操作失败了，虚拟机首先会检查对象的Mark Word是否指向当前线程的栈帧，如果是就说明当前线程已经拥有了这个对象的锁，那就可以直接进入同步块继续执行。否则说明多个线程竞争锁，轻量级锁就要膨胀为重量级锁，锁标志的状态值变为“10”，Mark Word中存储的就是指向重量级锁（互斥量）的指针，后面等待锁的线程也要进入阻塞状态。 而当前线程便尝试使用自旋来获取锁，自旋就是为了不让线程阻塞，而采用循环去获取锁的过程。<h5 id="释放轻量锁的过程"><a href="#释放轻量锁的过程" class="headerlink" title="释放轻量锁的过程"></a>释放轻量锁的过程</h5></li>
+<li>使用CAS操作将对象当前的Mark Word和线程中复制的Displaced Mark Word替换回来(依据Mark Word中锁记录指针是否还指向本线程的锁记录)，如果替换成功，则执行步骤2，否则执行步骤3。</li>
+<li>如果替换成功，整个同步过程就完成了，恢复到无锁的状态(01)。</li>
+<li>如果替换失败，说明有其他线程尝试获取该锁(此时锁已膨胀)，那就要在释放锁的同时，唤醒被挂起的线程。</li>
+</ol>
+<h4 id="该过程的完整流程图"><a href="#该过程的完整流程图" class="headerlink" title="该过程的完整流程图"></a>该过程的完整流程图</h4><p><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/lock_expand.png" alt="image"></p>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2019-08-07T13:19:47.804Z"><a href="/2019/08/07/README/">2019-08-07</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2019/08/07/README/"></a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h1 id="blog"><a href="#blog" class="headerlink" title="blog"></a>blog</h1>
+      
+    </div>
+    <footer>
+      
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
         <time datetime="2019-08-05T07:31:56.000Z"><a href="/2019/08/05/MySQL单表访问方式/">2019-08-05</a></time>
       
       
@@ -593,59 +690,11 @@
 
 
 
-  <article class="post">
-  
-  <div class="post-content">
-    <header>
-      
-        <div class="icon"></div>
-        <time datetime="2018-12-10T07:48:26.000Z"><a href="/2018/12/10/字典树/">2018-12-10</a></time>
-      
-      
-  
-    <h1 class="title"><a href="/2018/12/10/字典树/">字典树</a></h1>
-  
-
-    </header>
-    <div class="entry">
-      
-        <p>最近在刷题的时候遇到了字典树，字典树又称单词查找树。顾名思义，主要应用于字符串存储和检索，可以便捷的使用公共前缀实现字符串快速检，所以经常被搜索引擎系统用于文本词频统计。其主要思想还是空间换时间。时间复杂度等于O(树高)。它的优点是：利用字符串的公共前缀来减少查询时间，最大限度地减少无谓的字符串比较，查询效率比哈希树高。</p>
-<p>性质：</p>
-<ul>
-<li>根节点不包含字符，除根节点外每一个节点都只包含一个字符。</li>
-<li>从根节点到某一节点，路径上经过的字符连接起来，为该节点对应的字符串。</li>
-<li>每个节点的所有子节点包含的字符都不相同。</li>
-</ul>
-<p>搜索过程：</p>
-<ol>
-<li>从根结点开始一次搜索。</li>
-<li>取得要查找关键词的第一个字母，并根据该字母选择对应的子树并转到该子树继续进行检索。</li>
-<li>在相应的子树上，取得要查找关键词的第二个字母,并进一步选择对应的子树进行检索。</li>
-<li>迭代过程…</li>
-<li>在某个结点处，关键词的所有字母已被取出，则读取附在该结点上的信息，即完成查找。</li>
-</ol>
-<p>Java代码实现</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br></pre></td><td class="code"><pre><span class="line">//首先假设节点上的字符为a-z</span><br><span class="line">public class Trie &#123;</span><br><span class="line">    private int SIZE=26;</span><br><span class="line">    private TrieNode root;//字典树的根</span><br><span class="line"> </span><br><span class="line">    //初始化字典树</span><br><span class="line">    Trie() &#123;</span><br><span class="line">        root = new TrieNode();</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    //字典树节点</span><br><span class="line">    private class TrieNode &#123;</span><br><span class="line">        private int num;//有多少单词通过这个节点,即由根至该节点组成的字符串模式出现的次数</span><br><span class="line">        private TrieNode[] son;//所有的子节点</span><br><span class="line">        private boolean isEnd;//是不是最后一个节点</span><br><span class="line">        private char val;//节点的值</span><br><span class="line"> </span><br><span class="line">        TrieNode() &#123;</span><br><span class="line">            num = 1;</span><br><span class="line">            son = new TrieNode[SIZE];</span><br><span class="line">            isEnd = false;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    //在字典树中插入一个单词</span><br><span class="line">    public void insert(String str) &#123;</span><br><span class="line">        if(str==null||str.length()==0) &#123;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        TrieNode node=root;</span><br><span class="line">        char[]letters=str.toCharArray();</span><br><span class="line">        for(int i=0,len=str.length(); i&lt;len; i++) &#123;</span><br><span class="line">            int pos=letters[i]-&apos;a&apos;;</span><br><span class="line">            if(node.son[pos]==null) &#123;</span><br><span class="line">                node.son[pos]=newTrieNode();</span><br><span class="line">                node.son[pos].val=letters[i];</span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                node.son[pos].num++;</span><br><span class="line">            &#125;</span><br><span class="line">            node=node.son[pos];</span><br><span class="line">        &#125;</span><br><span class="line">        node.isEnd=true;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    //计算单词前缀的数量</span><br><span class="line">    public int countPrefix(Stringprefix) &#123;</span><br><span class="line">        if(prefix==null||prefix.length()==0) &#123;</span><br><span class="line">            return-1;</span><br><span class="line">        &#125;</span><br><span class="line">        TrieNode node=root;</span><br><span class="line">        char[]letters=prefix.toCharArray();</span><br><span class="line">        for(inti=0,len=prefix.length(); i&lt;len; i++) &#123;</span><br><span class="line">            int pos=letters[i]-&apos;a&apos;;</span><br><span class="line">            if(node.son[pos]==null) &#123;</span><br><span class="line">                return 0;</span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                node=node.son[pos];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        return node.num;</span><br><span class="line">    &#125;</span><br><span class="line">    //打印指定前缀的单词</span><br><span class="line">    public String hasPrefix(String prefix) &#123;</span><br><span class="line">        if (prefix == null || prefix.length() == 0) &#123;</span><br><span class="line">            return null;</span><br><span class="line">        &#125;</span><br><span class="line">        TrieNode node = root;</span><br><span class="line">        char[] letters = prefix.toCharArray();</span><br><span class="line">        for (int i = 0, len = prefix.length(); i &lt; len; i++) &#123;</span><br><span class="line">            int pos = letters[i] - &apos;a&apos;;</span><br><span class="line">            if (node.son[pos] == null) &#123;</span><br><span class="line">                return null;</span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                node = node.son[pos];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        preTraverse(node, prefix);</span><br><span class="line">        return &quot;&quot;;</span><br><span class="line">    &#125;</span><br><span class="line">    // 遍历经过此节点的单词.</span><br><span class="line">    public void preTraverse(TrieNode node, String prefix) &#123;</span><br><span class="line">        if (!node.isEnd) &#123;</span><br><span class="line">            for (TrieNode child : node.son) &#123;</span><br><span class="line">                if (child!=null) &#123;</span><br><span class="line">                    preTraverse(child, prefix+child.val);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(prefix);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line"> </span><br><span class="line">    //在字典树中查找一个完全匹配的单词.</span><br><span class="line">    public boolean has(Stringstr) &#123;</span><br><span class="line">        if(str==null||str.length()==0) &#123;</span><br><span class="line">            return false;</span><br><span class="line">        &#125;</span><br><span class="line">        TrieNode node=root;</span><br><span class="line">        char[]letters=str.toCharArray();</span><br><span class="line">        for(inti=0,len=str.length(); i&lt;len; i++) &#123;</span><br><span class="line">            intpos=letters[i]-&apos;a&apos;;</span><br><span class="line">            if(node.son[pos]!=null) &#123;</span><br><span class="line">                node=node.son[pos];</span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                return false;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        return node.isEnd;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    //前序遍历字典树.</span><br><span class="line">    public void preTraverse(TrieNodenode) &#123;</span><br><span class="line">        if(node!=null)&#123;</span><br><span class="line">            System.out.print(node.val+&quot;-&quot;);</span><br><span class="line">            for(TrieNodechild:node.son) &#123;</span><br><span class="line">                preTraverse(child);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    public TrieNode getRoot() &#123;</span><br><span class="line">        return this.root;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-      
-    </div>
-    <footer>
-      
-        
-        
-      
-      <div class="clearfix"></div>
-    </footer>
-  </div>
-</article>
-
-
-
-
 
 <nav id="pagination">
   
+  
+    <a href="/page/2/" class="alignright next">Next</a>
   
   <div class="clearfix"></div>
 </nav></div></div>
@@ -673,6 +722,8 @@
     <li><a href="/tags/JDK/">JDK</a><small>1</small></li>
   
     <li><a href="/tags/JVM/">JVM</a><small>1</small></li>
+  
+    <li><a href="/tags/Java/">Java</a><small>1</small></li>
   
     <li><a href="/tags/MySQL/">MySQL</a><small>1</small></li>
   

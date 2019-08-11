@@ -1,0 +1,222 @@
+<!DOCTYPE HTML>
+<html>
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="utf-8">
+  
+  <title>synchronized实现中的锁膨胀 | Index</title>
+  <meta name="author" content="captainjack0x7c8">
+  
+  <meta name="description" content="Less is more">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="synchronized实现中的锁膨胀">
+  <meta property="og:site_name" content="Index">
+
+  
+    <meta property="og:image" content>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="Index" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+</head>
+</html>
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">Index</a></h1>
+  <h2><a href="/"></a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div>
+</header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2019-08-11T03:33:14.000Z"><a href="/2019/08/11/synchronized实现中的锁膨胀/">2019-08-11</a></time>
+      
+      
+  
+    <h1 class="title">synchronized实现中的锁膨胀</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h3 id="synchronized实现中的锁膨胀"><a href="#synchronized实现中的锁膨胀" class="headerlink" title="synchronized实现中的锁膨胀"></a>synchronized实现中的锁膨胀</h3><p>JVM在不同的竞争情况下，对synchronized提供了不同的优化方式</p>
+<ul>
+<li>锁消除</li>
+<li>自旋</li>
+<li>自适应自旋</li>
+</ul>
+<p>在优化过程中锁主要存在4种状态：</p>
+<ol>
+<li>无锁状态</li>
+<li>偏向锁状态</li>
+<li>轻量级锁状态</li>
+<li>重量级锁状态</li>
+</ol>
+<p>这四种状态会根据资源竞争情况进行膨胀（升级）。</p>
+<h4 id="偏向锁"><a href="#偏向锁" class="headerlink" title="偏向锁"></a>偏向锁</h4><p>偏向锁的目的是为了消除无竞争情况下的同步原语，从而进一步提升性能。‘偏’指的是该锁会偏向于首先获得他的线程，如果在执行过程中，该锁未被其他的线程获取，则持有偏向锁的线程就一直不需要同步。</p>
+<h5 id="获取偏向锁的过程"><a href="#获取偏向锁的过程" class="headerlink" title="获取偏向锁的过程"></a>获取偏向锁的过程</h5><ol>
+<li>检查Mark World偏向锁是否打开。若为1，则执行步骤2，否则代表不支持偏向锁。</li>
+<li>检查Mark World储存的线程ID是否为当前线程ID，如果是则执行同步块，否则执行步骤3.</li>
+<li>使用CAS操作将Mark World中线程ID改为当前线程ID，若成功则执行同步代码块，否则执行步骤4。</li>
+<li>当拥有该锁的线程到达安全点后，挂起该线程，升级为轻量级锁。<h5 id="释放偏向锁的过程"><a href="#释放偏向锁的过程" class="headerlink" title="释放偏向锁的过程"></a>释放偏向锁的过程</h5></li>
+<li>偏向锁采取了竞争才会释放锁的方案，线程并不会主动放弃偏向锁，需要等待其他线程竞争。</li>
+<li>等待全局安全点。</li>
+<li>暂停拥有偏向锁的线程，检查持有偏向锁的线程是否活着，如果处于非活动状态，则将对象头设置为无锁状态，否则设置为被锁定状态。如果锁对象处于无锁状态，则恢复到无锁状态（01），以允许其他线程竞争，如果锁对象处于锁定状态，则挂起持有偏向锁的线程，并将对象头Mark World的锁记录指针改为当前线程的锁记录，锁升级为轻量锁。<h4 id="轻量级锁"><a href="#轻量级锁" class="headerlink" title="轻量级锁"></a>轻量级锁</h4>轻量级锁区别于使用mutex方式实现的重量级锁，他使用对象头中的Mark World进行同步。<h5 id="获取轻量锁的过程"><a href="#获取轻量锁的过程" class="headerlink" title="获取轻量锁的过程"></a>获取轻量锁的过程</h5></li>
+<li>在代码进入同步块的时候，如果同步对象锁状态为无锁状态（锁标志位为“01”状态，是否为偏向锁为“0”），虚拟机首先将在当前线程的栈帧中建立一个名为锁记录（Lock Record）的空间，用于存储锁对象目前的Mark Word的拷贝，官方称之为 Displaced Mark Word。</li>
+<li>拷贝对象头中的Mark Word复制到锁记录中。</li>
+<li>拷贝成功后，虚拟机将使用CAS操作尝试将对象的Mark Word更新为指向Lock Record的指针，并将Lock record里的owner指针指向object mark word。如果更新成功，则执行步骤4，否则执行步骤5。</li>
+<li>如果这个更新动作成功了，那么这个线程就拥有了该对象的锁，并且对象Mark Word的锁标志位设置为“00”，即表示此对象处于轻量级锁定状态。</li>
+<li>如果这个更新操作失败了，虚拟机首先会检查对象的Mark Word是否指向当前线程的栈帧，如果是就说明当前线程已经拥有了这个对象的锁，那就可以直接进入同步块继续执行。否则说明多个线程竞争锁，轻量级锁就要膨胀为重量级锁，锁标志的状态值变为“10”，Mark Word中存储的就是指向重量级锁（互斥量）的指针，后面等待锁的线程也要进入阻塞状态。 而当前线程便尝试使用自旋来获取锁，自旋就是为了不让线程阻塞，而采用循环去获取锁的过程。<h5 id="释放轻量锁的过程"><a href="#释放轻量锁的过程" class="headerlink" title="释放轻量锁的过程"></a>释放轻量锁的过程</h5></li>
+<li>使用CAS操作将对象当前的Mark Word和线程中复制的Displaced Mark Word替换回来(依据Mark Word中锁记录指针是否还指向本线程的锁记录)，如果替换成功，则执行步骤2，否则执行步骤3。</li>
+<li>如果替换成功，整个同步过程就完成了，恢复到无锁的状态(01)。</li>
+<li>如果替换失败，说明有其他线程尝试获取该锁(此时锁已膨胀)，那就要在释放锁的同时，唤醒被挂起的线程。</li>
+</ol>
+<h4 id="该过程的完整流程图"><a href="#该过程的完整流程图" class="headerlink" title="该过程的完整流程图"></a>该过程的完整流程图</h4><p><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/lock_expand.png" alt="image"></p>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+  
+  <div class="tags">
+    <a href="/tags/Java/">Java</a>
+  </div>
+
+        
+  <div class="addthis addthis_toolbox addthis_default_style">
+    
+      <a class="addthis_button_facebook_like" fb:like:layout="button_count"></a>
+    
+    
+      <a class="addthis_button_tweet"></a>
+    
+    
+      <a class="addthis_button_google_plusone" g:plusone:size="medium"></a>
+    
+    
+      <a class="addthis_button_pinterest_pinit" pi:pinit:layout="horizontal"></a>
+    
+    <a class="addthis_counter addthis_pill_style"></a>
+  </div>
+  <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
+
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+<section id="comment">
+  <h1 class="title">Comments</h1>
+
+  
+      <div id="fb-root"></div>
+<script>
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=123456789012345";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+</script>
+
+<div class="fb-comments" data-href="https://captainjack0x7c8.github.io/2019/08/11/synchronized实现中的锁膨胀/index.html" data-num-posts="5" data-width="840" data-colorscheme="light"></div>
+      
+  
+</section>
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="Search">
+    <input type="hidden" name="q" value="site:captainjack0x7c8.github.io">
+  </form>
+</div>
+
+  
+
+  
+<div class="widget tag">
+  <h3 class="title">Tags</h3>
+  <ul class="entry">
+  
+    <li><a href="/tags/AOP/">AOP</a><small>1</small></li>
+  
+    <li><a href="/tags/Feign/">Feign</a><small>1</small></li>
+  
+    <li><a href="/tags/HTTP/">HTTP</a><small>1</small></li>
+  
+    <li><a href="/tags/JDK/">JDK</a><small>1</small></li>
+  
+    <li><a href="/tags/JVM/">JVM</a><small>1</small></li>
+  
+    <li><a href="/tags/Java/">Java</a><small>1</small></li>
+  
+    <li><a href="/tags/MySQL/">MySQL</a><small>1</small></li>
+  
+    <li><a href="/tags/RFC/">RFC</a><small>1</small></li>
+  
+    <li><a href="/tags/Spring-Cloud/">Spring Cloud</a><small>1</small></li>
+  
+    <li><a href="/tags/linux/">linux</a><small>1</small></li>
+  
+    <li><a href="/tags/算法/">算法</a><small>2</small></li>
+  
+    <li><a href="/tags/设计模式/">设计模式</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2019 captainjack0x7c8
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+</body>
+</html>
