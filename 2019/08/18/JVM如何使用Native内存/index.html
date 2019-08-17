@@ -61,7 +61,7 @@
     </header>
     <div class="entry">
       
-        <h6 id="译自IBM-Developerworks"><a href="#译自IBM-Developerworks" class="headerlink" title="译自IBM Developerworks"></a>译自IBM Developerworks</h6><h6 id="Thanks-for-the-memory-Linux"><a href="#Thanks-for-the-memory-Linux" class="headerlink" title="Thanks for the memory, Linux"></a>Thanks for the memory, Linux</h6><h6 id="Understanding-how-the-JVM-uses-native-memory-on-Windows-and-Linux"><a href="#Understanding-how-the-JVM-uses-native-memory-on-Windows-and-Linux" class="headerlink" title="Understanding how the JVM uses native memory on Windows and Linux"></a>Understanding how the JVM uses native memory on Windows and Linux</h6><p><a href="https://www.ibm.com/developerworks/library/j-nativememory-linux/" target="_blank" rel="noopener">原文链接</a></p>
+        <h5 id="译自IBM-Developerworks"><a href="#译自IBM-Developerworks" class="headerlink" title="译自IBM Developerworks"></a>译自IBM Developerworks</h5><h5 id="Thanks-for-the-memory-Linux"><a href="#Thanks-for-the-memory-Linux" class="headerlink" title="Thanks for the memory, Linux"></a>Thanks for the memory, Linux</h5><h5 id="Understanding-how-the-JVM-uses-native-memory-on-Windows-and-Linux"><a href="#Understanding-how-the-JVM-uses-native-memory-on-Windows-and-Linux" class="headerlink" title="Understanding how the JVM uses native memory on Windows and Linux"></a>Understanding how the JVM uses native memory on Windows and Linux</h5><p><a href="https://www.ibm.com/developerworks/library/j-nativememory-linux/" target="_blank" rel="noopener">原文链接</a></p>
 <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>Java堆是我们在写程序时最常用的内存区域，它是存放所有Java对象的位置（译者注：现在未逃逸对象已经使用了栈上分配）。JVM旨在使我们不受主机特性的影响，所以在探讨内存的时候，很自然的就会想起堆内存。毫无疑问，你肯定遇到过由于对象泄漏或者堆内存过小导致的堆内存溢出，并且可能已经掌握了一些调试相关问题的手段。但是，当使用使用Java处理更多数据和更多并发时，你可能会遇到无法使用常规手段修复的内存溢出错误，即使堆内存未满，也会抛出错误(OutOfMemoryError)的情况。发生这种情况时，你需要了解Java运行时环境（JRE）内部的情况。<br></p>
 <p>Java应用在Java运行时的虚拟化环境中运行，但运行时本身也是用编程语言（例如C）开发的、使用native资源（包括内存）的程序。与Java应用使用的Java堆内存不同，native内存是系统运行时进程可用的内存。所有虚拟资源（包括Java堆和Java线程）都必须与虚拟机运行时使用的数据一起存储在native内存中。这意味着宿主机硬件和操作系统对native内存的限制会影响使用者对Java应用的操作。<br></p>
 <p>本文是在不同平台上涵盖相同主题的两篇文章之一。这两者中，你将了解native内存是啥，Java运行时如何使用它，它看起来是啥，以及如何调试native内存溢出错误。本文主要介绍在Windows和Linux平台，并不关注任何特定的运行时（JVM）实现。<a href="https://www.ibm.com/developerworks/java/library/j-nativememory-aix/" target="_blank" rel="noopener">配套文章</a>介绍了AIX，重点介绍了IBM®DeveloperKit for Java。 （该文章中关于IBM实现的信息对于AIX以外的平台也是如此，因此如果你在Linux上使用IBM Developer Kit for Java或者在IBM 32位Runtime Environment for Windows上，可能会发现该文章也很有用。)</p>
@@ -103,12 +103,10 @@
 <td>64</td>
 <td>64</td>
 </tr>
-<tr>
-<td>&gt; 表1.一些常用处理器架构的寄存器位宽和物理地址长度</td>
-<td></td>
-<td></td>
-</tr>
 </tbody></table>
+<blockquote>
+<p>表1.一些常用处理器架构的寄存器位宽和物理地址长度</p>
+</blockquote>
 <h4 id="操作系统与虚拟内存"><a href="#操作系统与虚拟内存" class="headerlink" title="操作系统与虚拟内存"></a>操作系统与虚拟内存</h4><p>对于不使用操作系统的程序来说，可以使用处理器寻址范围内的所有内存。但是为了享受多任务和硬件抽象等功能，大部分开发者还是会使用操作系统。<br></p>
 <p>在Windows和Linux等多任务操作系统中，许多程序共用包括内存在内的系统资源。每个程序都需要分配物理内存才能工作。理想情况下，可以设计这样一个操作系统，使每个程序可以直接使用物理内存，并且保证只使用由系统分配的内存。一些嵌入式操作系统的工作方式就类似这样，但在由多个未经过集成测试的程序组成的环境中并不实用，因为任何程序都可能破坏其他程序或操作系统本身的内存。<br></p>
 <p>虚拟内存允许多个进程共享物理内存，而且不会破坏彼此的数据。在使用虚拟内存的操作系统（例如Windows，Linux等其他操作系统）中，每个程序都有自己的虚拟地址空间：物理地址的逻辑区域，其大小由该系统的地址长度决定（31,32或桌面和服务器平台的64位）。进程中的虚拟地址空间可以映射到物理内存、文件或任何其他可寻址存储设备。操作系统可以将物理内存中数据移入和移出交换区域（Windows上的页面文件或Linux上的交换分区），以便充分利用物理内存。当程序试图使用虚拟地址访问存储器时，OS与片上硬件结合将该虚拟地址映射到物理位置。该位置可以是物理RAM，文件或页面文件/交换分区。如果已将某片内存区域移动到交换空间，则在使用之前将会把它重新加载到物理内存中。图1展示了虚拟内存通过进程地址空间映射以实现共享资源的工作原理：<br><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/virtual_memory.gif" alt="图1.虚拟内存将进程地址空间映射到物理资源"><br></p>
@@ -119,18 +117,12 @@
 <p>作为计算机引导序列的一部分，操作系统内核运行并初始化硬件。一旦内核配置了硬件及其自身的内部状态，就会启动第一个用户态进程。如果用户程序需要使用操作系统提供的服务，它可以执行系统调用从而跳转到内核程序，然后内核程序执行请求。对于诸如读取和写入文件，联网以及启动新进程等操作，通常需要系统调用。</p>
 <p>内核在执行系统调用时需要访问自己的内存和调用进程的内存。因为正在执行当前线程的处理器被配置为使用当前进程的地址空间映射来映射虚拟地址，所以大多数操作系统将每个进程地址空间的一部分映射到公共内核存储器区域。映射供内核使用的地址空间部分称为内核态空间;可以由用户应用程序使用的其余部分称为用户态空间。<br></p>
 <p>内核态和用户态空间的平衡因操作系统而异，甚至在不同硬件架构上运行的相同操作系统的实例之间也存在差异。这种平衡一般是可配置的，可为用户态程序或内核态程序提供更多空间。压缩内核态区域可能会导致诸如限制可以同时登录的用户数量或可以运行的进程数量等问题;较小的用户态空间则意味着供开发者使用的空间较小。<br></p>
-<p>默认情况下，在32位Windows具有2GB的用户态空间和2GB的内核态空间。某些Windows版本上，通过将</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/3GB</span><br></pre></td></tr></table></figure>
-
-<p>配置项开关添加到引导配置并使用</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/LARGEADDRESSAWARE</span><br></pre></td></tr></table></figure>
-
-<p>配置项开关重新链接应用程序，可以将用户态空间配置为3GB，内核空间为1GB。在32位Linux上，默认用户态空间为3GB和内核态空间为1GB。有些Linux发行版提供了一种名为hugemem，支持4GB用户态空间的内核。为实现此目的，内核拥有自己的地址空间，用于进行系统调用。在这种情况下，虽然用户态空间变大了，但系统调用变的更慢，因为操作系统必须在用户态和内核态的地址空间之间复制数据，并在每次进行系统调用时重置进程地址空间映射。图2展示了32位Windows的地址空间布局：</p>
+<p>默认情况下，在32位Windows具有2GB的用户态空间和2GB的内核态空间。某些Windows版本上，通过将<br><em>/3GB</em><br>配置项开关添加到引导配置并使用<br><em>/LARGEADDRESSAWARE</em><br>配置项开关重新链接应用程序，可以将用户态空间配置为3GB，内核空间为1GB。在32位Linux上，默认用户态空间为3GB和内核态空间为1GB。有些Linux发行版提供了一种名为hugemem，支持4GB用户态空间的内核。为实现此目的，内核拥有自己的地址空间，用于进行系统调用。在这种情况下，虽然用户态空间变大了，但系统调用变的更慢，因为操作系统必须在用户态和内核态的地址空间之间复制数据，并在每次进行系统调用时重置进程地址空间映射。图2展示了32位Windows的地址空间布局：</p>
 <p><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/windows_address_space.gif" alt="图2. 32位Windows的地址空间布局"></p>
 <p>图3显示了32位Linux的地址空间布局：<br><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/linux_address_space.gif" alt=" 图3. 32位Linux的地址空间布局"></p>
 <p>对于Linux 390 31位架构，使用单独的内核地址空间使得对于小于2GB的地址空间并不适合划分独立地址空间;但是390架构可以在工作同时使用多个地址空间而不会影响性能。<br></p>
 <p>进程地址空间必须包含程序所需的所有内容：包括程序本身和它使用的共享库（Windows上的DLL，Linux上的.so文件）。共享库不仅可以占用程序不能存储数据的空间，还能分割地址空间并减少可以作为连续块分配的内存。这在使用3GB用户态空间的Windows x86上运行的程序中很明显。 DLL是由首选的加载地址构建的：当加载DLL时，它被映射到特定位置的地址空间，除非该位置已被占用，此时，它会被重新定位并加载到其他位置。最初设计Windows NT时，用户态空间为2GB，系统库被加载至2GB的边界附近，从而使大部分用户态空间可供用户程序使用。当用户态空间扩展到3GB时，系统共享库仍然加载到2GB附近：位于用户空间的中间。虽然总用户态空间为3GB，但无法分配3GB的内存块，因为中间还隔着共享库。<br></p>
-<p>在Windows上使用<em>/3GB*开关可将内核空间减少到原先设计的一半(1GB)。在某些情况下，可能在耗尽1GB内核态空间时遇到慢I/O或创建新用户会话的问题。虽然</em>/3GB*开关对某些应用程序非常有价值，但使用它的任何环境都应在部署之前进行全面的压力测试。<br></p>
+<p>在Windows上使用<br><em>/3GB</em><br>开关可将内核空间减少到原先设计的一半(1GB)。在某些情况下，可能在耗尽1GB内核态空间时遇到慢I/O或创建新用户会话的问题。虽然<em>/3GB</em>开关对某些应用程序非常有价值，但使用它的任何环境都应在部署之前进行全面的压力测试。<br></p>
 <p>Native内存泄漏或使用太多的native内存使用会导致不同的问题，具体取决于是否耗尽地址空间或物理内存。耗尽地址空间通常只发生在32位的进程中：因为最大4GB很容易分配。64位进程有成百上千GB的用户态空间，所以很难耗尽。如果你耗尽了Java进程的地址空间，Java运行时就会出现我将在本文后面描述的奇怪症状。在进程地址空间比物理内存更大的系统上运行时，内存泄漏或过度使用native内存会强制操作系统将某些native进程的虚拟地址空间交换至外存。访问已被交换的内存地址比读取驻留（物理内存）地址要慢得多，因为操作系统必须从硬盘驱动器读取数据。为了可以分配足够的内存，可能耗尽所有物理内存和交换分区（页面文件）;在Linux上，这会触发内核内存不足（OOM）杀手，它会强行杀死占用大量内存的进程。在Windows上，分配开始失败的方式与地址空间已满时的方式相同。<br></p>
 <p>如果你使用的虚拟内存比物理内存更大，很明显，<del>在进程因为内存耗尽而被杀死之前很久就会出现问题</del>。系统会停止响应：大部分时间都用于在交换空间和物理内存之间来回复制。发生这种情况时，计算机和各个应用程序的性能将变得非常差。当JVM的Java堆被交换出时，GC的性能变得极差，以至于程序好像挂起了。如果在同一台计算机上运行多个Java程序实例时，物理内存必须足以容纳所有Java堆。</p>
 <h3 id="Java运行时如何使用native内存"><a href="#Java运行时如何使用native内存" class="headerlink" title="Java运行时如何使用native内存"></a>Java运行时如何使用native内存</h3><p>Java运行时是操作系统中的进程，它受到作者在前一节中概述的硬件和操作系统限制的约束。运行时环境提供了由未知代码驱动的功能，所以无法预测运行时环境在每种情况下都需要哪些资源。 在Java环境中，Java应用程序执行的每个操作都可能会影响提供该环境的运行时资源需求。本节介绍Java应用程序使用native内存的方式和以及为啥要这样用。<br></p>
