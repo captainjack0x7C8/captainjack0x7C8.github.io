@@ -52,6 +52,41 @@
     <header>
       
         <div class="icon"></div>
+        <time datetime="2019-02-07T07:57:00.000Z"><a href="/2019/02/07/快速排序/">2019-02-07</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2019/02/07/快速排序/">快速排序</a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h4 id="简述"><a href="#简述" class="headerlink" title="简述"></a>简述</h4><p>快速排序使用分治理念，将目标数组每次划分为左右两个区间分而治之。因而他也是一种不稳定排序算法，最坏情况下，每次选择的基准都是分区内最小或最大数，造成左/右分区为空，这种情况下，时间复杂度与冒泡排序相同，等于O(n^2)</p>
+<h6 id="Talk-is-cheap-show-me-the-code"><a href="#Talk-is-cheap-show-me-the-code" class="headerlink" title="Talk is cheap, show me the code."></a>Talk is cheap, show me the code.</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line">public class QuickSort &#123;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * a[]   目标数组</span><br><span class="line">     * low   低位</span><br><span class="line">     * hight 高位</span><br><span class="line">     **/ </span><br><span class="line">    public static void sort(int a[], int low, int hight) &#123;</span><br><span class="line">        int i, j, index;</span><br><span class="line">        if (low &gt; hight) &#123;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        //左分区起始位</span><br><span class="line">        i = low;</span><br><span class="line">        //右分区结束位</span><br><span class="line">        j = hight;</span><br><span class="line">        // 用子表的第一个记录做基准</span><br><span class="line">        index = a[i];</span><br><span class="line">        // 从表的两端交替向中间扫描</span><br><span class="line">        while (i &lt; j) &#123; </span><br><span class="line">            //先从高位向低位扫描</span><br><span class="line">            while (i &lt; j &amp;&amp; a[j] &gt;= index)</span><br><span class="line">                j--;</span><br><span class="line">            if (i &lt; j)</span><br><span class="line">                //用比基准小的记录替换低位记录</span><br><span class="line">                a[i++] = a[j];</span><br><span class="line">            //再从低位向高位扫描</span><br><span class="line">            while (i &lt; j &amp;&amp; a[i] &lt; index)</span><br><span class="line">                i++;</span><br><span class="line">            if (i &lt; j)</span><br><span class="line">                // 用比基准大的记录替换高位记录</span><br><span class="line">                a[j--] = a[i];</span><br><span class="line">        &#125;</span><br><span class="line">        // 将基准数值替换回 a[i]</span><br><span class="line">        a[i] = index;</span><br><span class="line">        //继续分区</span><br><span class="line">        sort(a, low, i - 1); // 对低子表进行递归排序</span><br><span class="line">        sort(a, i + 1, hight); // 对高子表进行递归排序</span><br><span class="line"> </span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    public static void quickSort(int a[]) &#123;</span><br><span class="line">        sort(a, 0, a.length - 1);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    public static void main(String[] args) &#123;</span><br><span class="line"> </span><br><span class="line">        int a[] = &#123; 48, 38, 69, 97, 76, 13, 37, 48 &#125;;</span><br><span class="line">        quickSort(a);</span><br><span class="line">        System.out.println(Arrays.toString(a));</span><br><span class="line">        </span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+      
+    </div>
+    <footer>
+      
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
         <time datetime="2018-12-10T07:48:26.000Z"><a href="/2018/12/10/字典树/">2018-12-10</a></time>
       
       
@@ -125,7 +160,7 @@
   
     <li><a href="/tags/HTTP/">HTTP</a><small>1</small></li>
   
-    <li><a href="/tags/JDK/">JDK</a><small>3</small></li>
+    <li><a href="/tags/JDK/">JDK</a><small>4</small></li>
   
     <li><a href="/tags/JVM/">JVM</a><small>1</small></li>
   
