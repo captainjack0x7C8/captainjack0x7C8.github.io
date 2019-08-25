@@ -157,8 +157,11 @@
 <p>那么，DirectByteBuffer数据究竟在哪里存储？应用程序仍然使用Java堆上的对象来编排I/O操作，但带有数据的缓冲区在native内存中：Java堆对象仅包含对native堆缓冲区的引用。非直接的ByteBuffer将其数据保存在Java堆上的byte数组中。图4显示了直接和非直接ByteBuffer对象之间的区别：<br><img src="https://raw.githubusercontent.com/captainjack0x7C8/image/master/bytebuffers.gif" alt=" 图4.直接和非直接java.nio.ByteBuffers的内存拓扑"><br><br><br>DirectByteBuffer对象自动清理其对应的native缓冲区，但只能作为Java堆GC的一部分执行：因此它们不会自动响应native堆上的压力。GC仅在Java堆变满时才会发生：无法继续分配内存时，或者Java应用程序显式调用，并不推荐显示调用，因为会导致性能问题（译者注，Full GC会导致STW）。<br></p>
 <p>极端情况下，native堆已满并且一个或多个DirectByteBuffers符合GC条件（可以在native堆中释放空间），但由于Java堆还没有满，所以不会GC。</p>
 <h4 id="线程"><a href="#线程" class="headerlink" title="线程"></a>线程</h4><p>程序中的每个线程都需要内存来存储其堆栈（用于保存局部变量的内存区域以及调用函数时的状态）。每个Java线程都需要运行堆栈空间。根据实现，Java线程可以具有单独的native和Java堆栈。除了堆栈空间之外，每个线程还需要一些native内存用于thread-local存储和内部数据结构。<br><br>栈大小因Java实现和架构而异。某些实现可以指定Java线程的栈大小。通常在256KB和756KB之间。<br><br>尽管每个线程使用的内存量非常小，但对于具有数百个线程的程序，线程栈的总内存使用量可能很大。当程序中的线程数量比可用处理器数量多很多时，会导致效率降低和内存使用量增加。</p>
-<h3 id="如何判断我的native内存是否耗尽？"><a href="#如何判断我的native内存是否耗尽？" class="headerlink" title="如何判断我的native内存是否耗尽？"></a>如何判断我的native内存是否耗尽？</h3><p>Java运行时处理Java堆内存耗尽和native堆内存耗尽的方式完全不同，尽管这两种情况都可能出现类似的症状。Java程序在Java堆耗尽时很难运行：因为Java应用程序很难在不分配对象的情况下执行任何操作。一旦Java堆填满，GC性能就会变得很糟并产生OutOfMemoryErrors。<br></p>
-
+<h3 id="如何判断我的native内存是否耗尽？"><a href="#如何判断我的native内存是否耗尽？" class="headerlink" title="如何判断我的native内存是否耗尽？"></a>如何判断我的native内存是否耗尽？</h3><p>Java运行时处理Java堆内存耗尽和native堆内存耗尽的方式完全不同，尽管这两种情况都可能出现类似的症状。Java程序在Java堆耗尽时很难运行：因为Java应用程序很难在不分配对象的情况下执行任何操作。一旦Java堆填满，GC性能就会变得非常糟糕，并抛出OutOfMemoryErrors。<br></p>
+<p>相反，一旦Java运行时启动并且程序处于稳定状态，就可以一直工作到native堆完全耗尽。不一定出现奇怪的行为（native堆耗尽时），因为需要分配native内存的操作比需要分配Java堆的操作要少得多。虽然需要分配native内存的操作因JVM实现而异，但一些常用示例包括：启动线程，加载类以及执行某些类型的网络和文件I/O.<br></p>
+<p>Native内存不足时的症状比Java堆内存不足时的症状不尽相同，因为native堆的分配没有单一的控制入口。尽管所有Java堆分配都在Java内存管理系统的控制之下，但任何本机代码 ：无论是在JVM内部，Java类库还是应用程序代码，都可以执行本机内存分配，并捕获错误。然后根据设计者的想法，相应代码然后可以处理该错误：它可以通过JNI接口抛出OutOfMemoryError，在控制台打印日志、静默失败并稍后再试、或者做一些其他的事情。<br></p>
+<p>由于native内存耗尽的诸多症状并不典型，所以没有一种简单的办法可以确认native内存耗尽。所以，需要使用来自操作系统和Java运行时的数据来确认问题究竟出在哪里。<br></p>
+<h3 id="native内存耗尽的几个例子"><a href="#native内存耗尽的几个例子" class="headerlink" title="native内存耗尽的几个例子"></a>native内存耗尽的几个例子</h3>
       
     </div>
     <footer>
