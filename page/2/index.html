@@ -52,6 +52,49 @@
     <header>
       
         <div class="icon"></div>
+        <time datetime="2019-03-01T02:15:40.000Z"><a href="/2019/03/01/Feign的继承支持/">2019-03-01</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2019/03/01/Feign的继承支持/">Feign的继承支持</a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p><a href="https://cloud.spring.io/spring-cloud-netflix/multi/multi_spring-cloud-feign.html#spring-cloud-feign-inheritance" target="_blank" rel="noopener">译自Spring Cloud Document</a></p>
+<h2 id="7-7-Feign的继承支持"><a href="#7-7-Feign的继承支持" class="headerlink" title="7.7 Feign的继承支持"></a>7.7 Feign的继承支持</h2><p>Feign通过单继承接口支持模板apis。这样可以把常用操作通过接口进行分组。</p>
+<h6 id="UserService-java"><a href="#UserService-java" class="headerlink" title="UserService.java."></a>UserService.java.</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">public interface UserService &#123;</span><br><span class="line"></span><br><span class="line">    @RequestMapping(method = RequestMethod.GET, value =&quot;/users/&#123;id&#125;&quot;)</span><br><span class="line">    User getUser(@PathVariable(&quot;id&quot;) long id);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h6 id="UserResource-java"><a href="#UserResource-java" class="headerlink" title="UserResource.java."></a>UserResource.java.</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@RestController</span><br><span class="line">public class UserResource implements UserService &#123;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h6 id="UserClient-java"><a href="#UserClient-java" class="headerlink" title="UserClient.java."></a>UserClient.java.</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">package project.user;</span><br><span class="line"></span><br><span class="line">@FeignClient(&quot;users&quot;)</span><br><span class="line">public interface UserClient extends UserService &#123;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>通常不建议在服务器和客户端之间共享接口（Java Interface）。这是一种紧耦合，而且这样也无法使用Spring MVC（方法中的参数映射不会被继承）。</p>
+</blockquote>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
         <time datetime="2019-02-07T07:57:00.000Z"><a href="/2019/02/07/快速排序/">2019-02-07</a></time>
       
       
@@ -160,7 +203,7 @@
   
     <li><a href="/tags/HTTP/">HTTP</a><small>1</small></li>
   
-    <li><a href="/tags/JDK/">JDK</a><small>4</small></li>
+    <li><a href="/tags/JDK/">JDK</a><small>5</small></li>
   
     <li><a href="/tags/JVM/">JVM</a><small>1</small></li>
   

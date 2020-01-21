@@ -52,6 +52,54 @@
     <header>
       
         <div class="icon"></div>
+        <time datetime="2020-01-21T01:40:02.000Z"><a href="/2020/01/21/ScheduledExecutorService的坑/">2020-01-21</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2020/01/21/ScheduledExecutorService的坑/">ScheduledThreadPoolExecutor的坑</a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p>最近项目在一次更新后，发现定时任务无法执行了，根据日志推断，任务在执行到某一行后莫名其妙的就中断了，这不科学。排查了一下，发现这是<em>ScheduledThreadPoolExecutor</em>的一个坑。</p>
+<h2 id="起因"><a href="#起因" class="headerlink" title="起因"></a>起因</h2><p>故障原因是由于NoClassDefDoundErorr引起的，由于依赖冲突，导致某个类找不到了，所以当代码执行到某行时，类加载器找不到这个类，就抛一个Error出来，任务线程也就中断了。按照一般的逻辑，本次定时任务被中断，到了下次开始运行的时间应该可以继续执行吧，这就是<em>ScheduledThreadPoolExecutor</em>的坑了：定时任务遇到异常导致线程死亡后，该任务将不会被继续执行。</p>
+<h2 id="解决办法"><a href="#解决办法" class="headerlink" title="解决办法"></a>解决办法</h2><ol>
+<li>在向<em>ScheduledThreadPoolExecutor</em>提交任务时，可以拿到一个<em>ScheduledFuture&lt;?&gt;</em>，通过它可以捕捉到ExecutionException，也就是任务执行中抛出的异常（错误）。</li>
+<li>在代码中try-catch-all。<h6 id="感觉第二种方式不太优雅。"><a href="#感觉第二种方式不太优雅。" class="headerlink" title="感觉第二种方式不太优雅。"></a>感觉第二种方式不太优雅。</h6></li>
+</ol>
+<h2 id="代码分析"><a href="#代码分析" class="headerlink" title="代码分析"></a>代码分析</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">public ScheduledFuture&lt;?&gt; scheduleWithFixedDelay(Runnable command,</span><br><span class="line">                                                    long initialDelay,</span><br><span class="line">                                                    long delay,</span><br><span class="line">                                                    TimeUnit unit) &#123;</span><br><span class="line">       if (command == null || unit == null)</span><br><span class="line">           throw new NullPointerException();</span><br><span class="line">       if (delay &lt;= 0)</span><br><span class="line">           throw new IllegalArgumentException();</span><br><span class="line">       ScheduledFutureTask&lt;Void&gt; sft =</span><br><span class="line">           new ScheduledFutureTask&lt;Void&gt;(command,</span><br><span class="line">                                         null,</span><br><span class="line">                                         triggerTime(initialDelay, unit),</span><br><span class="line">                                         unit.toNanos(-delay));</span><br><span class="line">       RunnableScheduledFuture&lt;Void&gt; t = decorateTask(command, sft);</span><br><span class="line">       sft.outerTask = t;</span><br><span class="line">       delayedExecute(t);</span><br><span class="line">       return t;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意将<em>Runnable</em>包装为<em>ScheduledFutureTask<void></void></em>的过程。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">/**</span><br><span class="line"> * Overrides FutureTask version so as to reset/requeue if periodic.</span><br><span class="line"> */</span><br><span class="line">public void run() &#123;</span><br><span class="line">    boolean periodic = isPeriodic();</span><br><span class="line">    if (!canRunInCurrentRunState(periodic))</span><br><span class="line">        cancel(false);</span><br><span class="line">    else if (!periodic)</span><br><span class="line">        ScheduledFutureTask.super.run();</span><br><span class="line">    else if (ScheduledFutureTask.super.runAndReset()) &#123;</span><br><span class="line">        setNextRunTime();</span><br><span class="line">        reExecutePeriodic(outerTask);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>问题就在<em>ScheduledFutureTask.super.runAndReset()</em>，我们一探究竟。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">/**</span><br><span class="line"> * Executes the computation without setting its result, and then</span><br><span class="line"> * resets this future to initial state, failing to do so if the</span><br><span class="line"> * computation encounters an exception or is cancelled.  This is</span><br><span class="line"> * designed for use with tasks that intrinsically execute more</span><br><span class="line"> * than once.</span><br><span class="line"> *</span><br><span class="line"> * @return &#123;@code true&#125; if successfully run and reset</span><br><span class="line"> */</span><br><span class="line">   protected boolean runAndReset()</span><br></pre></td></tr></table></figure>
+
+<p><em>ScheduledThreadPoolExecutor</em>直接使用了<em>FutureTask</em>的<em>runAndReset()</em>，注意：</p>
+<h6 id="Failing-to-do-so-if-the-computation-encounters-an-exception-or-is-cancelled"><a href="#Failing-to-do-so-if-the-computation-encounters-an-exception-or-is-cancelled" class="headerlink" title="Failing to do so if the computation encounters an exception or is cancelled"></a>Failing to do so if the computation encounters an exception or is cancelled</h6><p>所以如果需要支持在出现异常的情况下重复运行，需要自己手动来重写该方法。</p>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
         <time datetime="2019-08-17T16:04:55.000Z"><a href="/2019/08/18/JVM如何使用Native内存/">2019-08-18</a></time>
       
       
@@ -802,49 +850,6 @@
 
 
 
-  <article class="post">
-  
-  <div class="post-content">
-    <header>
-      
-        <div class="icon"></div>
-        <time datetime="2019-03-01T02:15:40.000Z"><a href="/2019/03/01/Feign的继承支持/">2019-03-01</a></time>
-      
-      
-  
-    <h1 class="title"><a href="/2019/03/01/Feign的继承支持/">Feign的继承支持</a></h1>
-  
-
-    </header>
-    <div class="entry">
-      
-        <p><a href="https://cloud.spring.io/spring-cloud-netflix/multi/multi_spring-cloud-feign.html#spring-cloud-feign-inheritance" target="_blank" rel="noopener">译自Spring Cloud Document</a></p>
-<h2 id="7-7-Feign的继承支持"><a href="#7-7-Feign的继承支持" class="headerlink" title="7.7 Feign的继承支持"></a>7.7 Feign的继承支持</h2><p>Feign通过单继承接口支持模板apis。这样可以把常用操作通过接口进行分组。</p>
-<h6 id="UserService-java"><a href="#UserService-java" class="headerlink" title="UserService.java."></a>UserService.java.</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">public interface UserService &#123;</span><br><span class="line"></span><br><span class="line">    @RequestMapping(method = RequestMethod.GET, value =&quot;/users/&#123;id&#125;&quot;)</span><br><span class="line">    User getUser(@PathVariable(&quot;id&quot;) long id);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h6 id="UserResource-java"><a href="#UserResource-java" class="headerlink" title="UserResource.java."></a>UserResource.java.</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@RestController</span><br><span class="line">public class UserResource implements UserService &#123;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h6 id="UserClient-java"><a href="#UserClient-java" class="headerlink" title="UserClient.java."></a>UserClient.java.</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">package project.user;</span><br><span class="line"></span><br><span class="line">@FeignClient(&quot;users&quot;)</span><br><span class="line">public interface UserClient extends UserService &#123;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<blockquote>
-<p>通常不建议在服务器和客户端之间共享接口（Java Interface）。这是一种紧耦合，而且这样也无法使用Spring MVC（方法中的参数映射不会被继承）。</p>
-</blockquote>
-
-      
-    </div>
-    <footer>
-      
-        
-        
-      
-      <div class="clearfix"></div>
-    </footer>
-  </div>
-</article>
-
-
-
-
 
 <nav id="pagination">
   
@@ -874,7 +879,7 @@
   
     <li><a href="/tags/HTTP/">HTTP</a><small>1</small></li>
   
-    <li><a href="/tags/JDK/">JDK</a><small>4</small></li>
+    <li><a href="/tags/JDK/">JDK</a><small>5</small></li>
   
     <li><a href="/tags/JVM/">JVM</a><small>1</small></li>
   
